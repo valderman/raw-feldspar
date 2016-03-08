@@ -9,8 +9,6 @@ module Data.Inhabited where
 import Data.Int
 import Data.Word
 
-import Data.Inhabited.TH
-
 
 
 -- | Inhabited types
@@ -31,6 +29,10 @@ instance Inhabited Word8  where example = 0
 instance Inhabited Word16 where example = 0
 instance Inhabited Word32 where example = 0
 instance Inhabited Word64 where example = 0
-
-inhabitedTupleInstances 15
-
+instance (Inhabited a,
+          Inhabited b) =>
+         Inhabited (a, b) where example = (example, example)
+instance (Inhabited a,
+          Inhabited b,
+          Inhabited c) =>
+         Inhabited (a, b, c) where example = (example, example, example)

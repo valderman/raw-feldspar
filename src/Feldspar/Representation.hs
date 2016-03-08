@@ -1,5 +1,5 @@
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 -- | Internal representation of Feldspar programs
 
@@ -13,11 +13,8 @@ import Data.Word
 
 import Language.Syntactic
 import Language.Syntactic.Functional
-import Language.Syntactic.Functional.Tuple
-import Language.Syntactic.TH
 
 import Data.TypeRep
-import Data.TypeRep.TH
 import Data.TypeRep.Types.Basic
 import Data.TypeRep.Types.Basic.Typeable ()
 import Data.TypeRep.Types.Tuple
@@ -26,22 +23,20 @@ import Data.TypeRep.Types.IntWord
 import Data.TypeRep.Types.IntWord.Typeable ()
 import Language.Syntactic.TypeRep (sugarSymTR)
 import Language.Syntactic.TypeRep.Sugar.BindingTR ()
-import Language.Syntactic.TypeRep.Sugar.TupleTR ()
 
 import qualified Control.Monad.Operational.Higher as H
 
-import Language.Embedded.Hardware (HType)
-import Language.Embedded.Hardware.Interface (PredicateExp)
-
-import Language.Embedded.CExp (CType)
 import Language.Embedded.Expression (FreeExp (..), EvalExp (..))
 import qualified Language.Embedded.Imperative.CMD as Imp
-
-import qualified Language.C.Quote as C
 
 import qualified Data.Inhabited as Inhabited
 import Data.VirtualContainer
 
+-- haste stuff
+import Language.JS.Syntax (ToIdent (..))
+import Language.JS.Expression (JSType)
+import Haste (JSString)
+import qualified Haste.JSString as S
 
 
 --------------------------------------------------------------------------------
@@ -50,10 +45,10 @@ import Data.VirtualContainer
 
 type FeldTypes
     =   BoolType
-    :+: FloatType
+--    :+: FloatType
     :+: DoubleType
     :+: IntWordType
-    :+: TupleType
+--    :+: TupleType
     :+: FunType
 
 pFeldTypes :: Proxy FeldTypes
@@ -64,8 +59,8 @@ class    (Typeable FeldTypes a, VirtualType SmallType a, Show a, Eq a, Ord a, In
 instance (Typeable FeldTypes a, VirtualType SmallType a, Show a, Eq a, Ord a, Inhabited.Inhabited a) => Type a
 
 -- | Small Feldspar types
-class    (Type a, CType a, HType a) => SmallType a
-instance (Type a, CType a, HType a) => SmallType a
+class    (Type a, JSType a) => SmallType a
+instance (Type a, JSType a) => SmallType a
 
 instance ShowClass Type      where showClass _ = "Type"
 instance ShowClass SmallType where showClass _ = "SmallType"
@@ -88,9 +83,9 @@ newtype Arr a = Arr { unArr :: Virtual SmallType (Imp.Arr Index) a }
 -- | Immutable array
 newtype IArr a = IArr { unIArr :: Virtual SmallType (Imp.IArr Index) a }
 
-instance SmallType a => C.ToIdent (Ref a)  where toIdent (Ref (Actual r))  = C.toIdent r
-instance SmallType a => C.ToIdent (Arr a)  where toIdent (Arr (Actual a))  = C.toIdent a
-instance SmallType a => C.ToIdent (IArr a) where toIdent (IArr (Actual a)) = C.toIdent a
+instance SmallType a => ToIdent (Ref a)  where toIdent (Ref (Actual r))  = toIdent r
+instance SmallType a => ToIdent (Arr a)  where toIdent (Arr (Actual a))  = toIdent a
+instance SmallType a => ToIdent (IArr a) where toIdent (IArr (Actual a)) = toIdent a
 
 instance SmallType a => Imp.Assignable (Ref a)
 instance SmallType a => Imp.Assignable (Arr a)
@@ -197,7 +192,7 @@ data Array sig
 
 instance Render Array
   where
-    renderSym (ArrIx (Imp.IArrComp arr)) = "ArrIx " ++ arr
+    renderSym (ArrIx (Imp.IArrComp arr)) = S.unpack $ S.append "ArrIx " arr
     renderSym (ArrIx _)                  = "ArrIx ..."
     renderArgs = renderArgsSmart
 
@@ -215,7 +210,7 @@ instance Equality Array
 -- | Conditionals
 data Condition sig
   where
-    Condition :: Type a => Condition (Bool :-> a :-> a :-> Full a)
+    Condition :: SmallType a => Condition (Bool :-> a :-> a :-> Full a)
 
 instance Eval Condition
   where
@@ -224,7 +219,7 @@ instance Eval Condition
 -- | For loop
 data ForLoop sig
   where
-    ForLoop :: Type st => ForLoop (Length :-> st :-> (Index -> st -> st) :-> Full st)
+    ForLoop :: SmallType st => ForLoop (Length :-> st :-> (Index -> st -> st) :-> Full st)
 
 instance Eval ForLoop
   where
@@ -234,7 +229,7 @@ instance Eval ForLoop
 data IOSym sig
   where
     -- Result of an IO operation
-    FreeVar :: SmallType a => String -> IOSym (Full a)
+    FreeVar :: SmallType a => JSString -> IOSym (Full a)
     -- Turn a program into a pure value
     UnsafePerform :: Comp (Data a) -> IOSym (Full a)
     -- Identity function with a side effect
@@ -245,13 +240,13 @@ data IOSym sig
 
 instance Render IOSym
   where
-    renderSym (FreeVar v)           = v
+    renderSym (FreeVar v)           = S.unpack v
     renderSym (UnsafePerform _)     = "UnsafePerform ..."
     renderSym (UnsafePerformWith _) = "UnsafePerformWith ..."
 
 instance Eval IOSym
   where
-    evalSym (FreeVar v) = error $ "eval: cannot evaluate free variable " ++ v
+    evalSym (FreeVar v) = error $ "eval: cannot evaluate free variable " ++ S.unpack v
     evalSym s = error $ "eval: cannot evaluate unsafe operation " ++ renderSym s
 
 -- | 'equal' can only return 'True' for 'FreeVar' and 'UnsafeArrIx'. For
@@ -266,7 +261,7 @@ type FeldConstructs
     =   Literal
     :+: BindingT
     :+: Let
-    :+: Tuple
+--    :+: Tuple
     :+: Primitive
     :+: Array
     :+: Condition
@@ -285,18 +280,16 @@ instance Syntactic (Data a)
     desugar = unData
     sugar   = Data
 
-instance Syntactic (Virtual SmallType Data a)
+instance SmallType a => Syntactic (Virtual SmallType Data a)
   where
     type Domain   (Virtual SmallType Data a) = FeldDomain
     type Internal (Virtual SmallType Data a) = a
-    desugar = desugar . mapVirtual (ASTFull . unData)
-    sugar   = mapVirtual (Data . unASTFull) . sugar
+    desugar (Actual a) = desugar a -- desugar . mapVirtual (ASTFull . unData)
+    sugar   = Actual . sugar -- mapVirtual (Data . unASTFull) . sugar
 
 -- | Specialization of the 'Syntactic' class for the Feldspar domain
-class    (Syntactic a, Domain a ~ FeldDomain, Type (Internal a)) => Syntax a
-instance (Syntactic a, Domain a ~ FeldDomain, Type (Internal a)) => Syntax a
-
-type instance PredicateExp Data = SmallType
+class    (Syntactic a, Domain a ~ FeldDomain, SmallType (Internal a)) => Syntax a
+instance (Syntactic a, Domain a ~ FeldDomain, SmallType (Internal a)) => Syntax a
 
 -- | Evaluate an expression
 eval :: (Syntactic a, Domain a ~ FeldDomain) => a -> Internal a
@@ -334,44 +327,110 @@ newtype Comp a = Comp { unComp :: H.Program CompCMD a }
 -- Uninteresting instances
 --------------------------------------------------------------------------------
 
+{-
 derivePWitness ''Type ''BoolType
 derivePWitness ''Type ''FloatType
 derivePWitness ''Type ''DoubleType
 derivePWitness ''Type ''IntWordType
 derivePWitness ''Type ''TupleType
+-}
 
 instance PWitness Type FunType t
 
+{-
 derivePWitness ''SmallType ''BoolType
 derivePWitness ''SmallType ''FloatType
 derivePWitness ''SmallType ''DoubleType
 derivePWitness ''SmallType ''IntWordType
+-}
 
 instance PWitness SmallType TupleType t
 instance PWitness SmallType FunType t
 
-deriveSymbol   ''Primitive
-deriveEquality ''Primitive
+instance Symbol Primitive where
+  symSig Pi = signature
+  symSig Add = signature
+  symSig Sub = signature
+  symSig Mul = signature
+  symSig Neg = signature
+  symSig Quot = signature
+  symSig Rem = signature
+  symSig FDiv = signature
+  symSig Sin = signature
+  symSig Cos = signature
+  symSig Pow = signature
+  symSig I2N = signature
+  symSig I2B = signature
+  symSig B2I = signature
+  symSig Round = signature
+  symSig Not = signature
+  symSig And = signature
+  symSig Or = signature
+  symSig Eq = signature
+  symSig Lt = signature
+  symSig Gt = signature
+  symSig Le = signature
+  symSig Ge = signature
+
+instance Equality Primitive where
+  equal Pi Pi = True
+  equal Add Add = True
+  equal Sub Sub = True
+  equal Mul Mul = True
+  equal Neg Neg = True
+  equal Quot Quot = True
+  equal Rem Rem = True
+  equal FDiv FDiv = True
+  equal Sin Sin = True
+  equal Cos Cos = True
+  equal Pow Pow = True
+  equal I2N I2N = True
+  equal I2B I2B = True
+  equal B2I B2I = True
+  equal Round Round = True
+  equal Not Not = True
+  equal And And = True
+  equal Or Or = True
+  equal Eq Eq = True
+  equal Lt Lt = True
+  equal Gt Gt = True
+  equal Le Le = True
+  equal Ge Ge = True
+  equal _ _ = False
 
 instance StringTree Primitive
 
-deriveSymbol ''Array
+instance Symbol Array where
+  symSig (ArrIx _) = signature
 
 instance StringTree Array
 
-deriveSymbol    ''Condition
-deriveRender id ''Condition
-deriveEquality  ''Condition
+instance Symbol Condition where
+  symSig Condition = signature
+
+instance Render Condition where
+  renderSym _ = "<condition>"
+
+instance Equality Condition where
+  equal _ _ = True
 
 instance StringTree Condition
 
-deriveSymbol    ''ForLoop
-deriveRender id ''ForLoop
-deriveEquality  ''ForLoop
+instance Symbol ForLoop where
+  symSig ForLoop = signature
+
+instance Render ForLoop where
+  renderSym _ = "<for loop>"
+
+instance Equality ForLoop where
+  equal _ _ = True
 
 instance StringTree ForLoop
 
-deriveSymbol ''IOSym
+instance Symbol IOSym where
+  symSig (FreeVar _) = signature
+  symSig (UnsafePerform _) = signature
+  symSig (UnsafePerformWith _) = signature
 
 instance StringTree IOSym
 

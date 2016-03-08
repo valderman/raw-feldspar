@@ -47,6 +47,7 @@ instance Monad Validated
       where
         Validated valid' b = k a
 
+{-
 instance Syntax a => Syntactic (Validated a)
   where
     type Domain (Validated a)   = FeldDomain
@@ -60,6 +61,7 @@ instance Forcible a => Forcible (Validated a)
     type ValueRep (Validated a) = (Data Bool, ValueRep a)
     toValue (Validated valid a) = toValue (valid,a)
     fromValue = uncurry Validated . fromValue
+-}
 
 -- | Create a validated value. Note that the value may get evaluated even if the
 -- condition is false.

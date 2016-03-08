@@ -1,5 +1,5 @@
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Feldspar.Run.Compile where
 
@@ -12,7 +12,6 @@ import qualified Data.Map as Map
 
 import Language.Syntactic hiding ((:+:) (..), (:<:) (..))
 import Language.Syntactic.Functional hiding (Binding (..))
-import Language.Syntactic.Functional.Tuple
 
 import Data.TypeRep
 
@@ -21,28 +20,34 @@ import qualified Control.Monad.Operational.Higher as Oper
 import Language.Embedded.Imperative hiding ((:+:) (..), (:<:) (..))
 import qualified Language.Embedded.Imperative as Imp
 import Language.Embedded.Imperative.CMD hiding (Ref, Arr)
-import Language.Embedded.CExp
-import qualified Language.Embedded.Backend.C as Imp
+import Language.JS.Expression
+import qualified Language.Embedded.Backend.JS as Imp
 
 import Data.VirtualContainer
 import Feldspar.Representation
 import Feldspar.Run.Representation
 import Feldspar.Optimize
 import qualified Feldspar.Frontend as Feld
-import Language.Embedded.Backend.C (ExternalCompilerOpts (..))
 
-
+import Haste (JSString)
+import qualified Haste.JSString as S
+import Language.JS.Print (CodeTuning)
+import Language.JS.Monad (ReturnValue)
+import Language.JS.Export (Export, ApliteCMD)
+import Data.TypeRep.Types.Basic
+import Data.TypeRep.Types.IntWord
+import Data.TypeRep.Representation
 
 --------------------------------------------------------------------------------
 -- * Virtual variables
 --------------------------------------------------------------------------------
 
 newRefV :: VirtualType SmallType a =>
-    String -> Target (Virtual SmallType Imp.Ref a)
+    JSString -> Target (Virtual SmallType Imp.Ref a)
 newRefV base = lift $ mapVirtualA (const (newNamedRef base)) virtRep
 
 initRefV :: VirtualType SmallType a =>
-    String -> VExp a -> Target (Virtual SmallType Imp.Ref a)
+    JSString -> VExp a -> Target (Virtual SmallType Imp.Ref a)
 initRefV base = lift . mapVirtualA (initNamedRef base)
 
 getRefV :: VirtualType SmallType a =>
@@ -69,8 +74,25 @@ type VExp = Virtual SmallType CExp
 -- | Virtual expression with hidden result type
 data VExp'
   where
-    VExp' :: Type a => Virtual SmallType CExp a -> VExp'
+    VExp' :: SmallType a => Virtual SmallType CExp a -> VExp'
 
+instance ShowClass JSType where
+  showClass _ = "JSType"
+
+instance PWitness SmallType BoolType t where pwitSym Bool_t _ = return Dict
+instance PWitness SmallType DoubleType t where pwitSym Double_t _ = return Dict
+instance PWitness SmallType IntWordType t where
+  pwitSym Int32_t _  = return Dict
+  pwitSym Word32_t _ = return Dict
+
+instance PWitness JSType BoolType t where pwitSym Bool_t _ = return Dict
+instance PWitness JSType DoubleType t where pwitSym Double_t _ = return Dict
+instance PWitness JSType FunType t
+instance PWitness JSType IntWordType t where
+  pwitSym Int32_t _  = return Dict
+  pwitSym Word32_t _ = return Dict
+
+{-
 type TargetCMD
     =       RefCMD CExp
     Imp.:+: ArrCMD CExp
@@ -78,6 +100,8 @@ type TargetCMD
     Imp.:+: PtrCMD
     Imp.:+: FileCMD CExp
     Imp.:+: C_CMD CExp
+-}
+type TargetCMD = ApliteCMD
 
 type Env = Map Name VExp'
 
@@ -85,7 +109,7 @@ type Env = Map Name VExp'
 type Target = ReaderT Env (Program TargetCMD)
 
 -- | Add a local alias to the environment
-localAlias :: Type a
+localAlias :: SmallType a
     => Name    -- ^ Old name
     -> VExp a  -- ^ New expression
     -> Target b
@@ -93,11 +117,11 @@ localAlias :: Type a
 localAlias v e = local (Map.insert v (VExp' e))
 
 -- | Lookup an alias in the environment
-lookAlias :: forall a . Type a => Name -> Target (VExp a)
+lookAlias :: forall a . SmallType a => Name -> Target (VExp a)
 lookAlias v = do
     env <- ask
     return $ case Map.lookup v env of
-        Nothing | Right Dict <- pwit pCType tr
+        Nothing | Right Dict <- pwit pJSType tr
                -> error $ "lookAlias: variable " ++ show v ++ " not in scope"
         Just (VExp' e) -> case gcast pFeldTypes e of
             Left msg -> error $ "lookAlias: " ++ msg
@@ -160,6 +184,7 @@ instance Lower (ControlCMD Data)
         lift $ assert cond' msg
     lowerInstr Break = lift Imp.break
 
+{-
 instance Lower PtrCMD
   where
     lowerInstr (SwapPtr a b) = lift $ unsafeSwap a b
@@ -179,7 +204,7 @@ instance Lower (C_CMD Data)
   where
     lowerInstr (NewObject base p t) = lift $ newNamedObject base p t
     lowerInstr (AddInclude incl)    = lift $ addInclude incl
-    lowerInstr (AddDefinition def)  = lift $ addDefinition def
+--    lowerInstr (AddDefinition def)  = lift $ addDefinition def
     lowerInstr (AddExternFun f (_ :: proxy (Data res)) as) =
         lift . addExternFun f (Proxy :: Proxy (CExp res)) =<< transFunArgs as
     lowerInstr (AddExternProc p as) = lift . addExternProc p =<< transFunArgs as
@@ -192,6 +217,7 @@ transFunArgs = mapM $ mapMArg predCast translateSmallExp
   where
     predCast :: VarPredCast Data CExp
     predCast _ a = a
+-}
 
 instance (Lower i1, Lower i2) => Lower (i1 Imp.:+: i2)
   where
@@ -228,20 +254,21 @@ transAST = goAST . optimize
        -> Args (AST FeldDomain) sig -> Target (VExp (DenResult sig))
     go t lit Nil
         | Just (Literal a) <- prj lit
-        , Right Dict <- pwit pType t
+        , Right Dict <- pwit pSmallType t
         = return $ mapVirtual (value . runIdentity) $ toVirtual a
     go t var Nil
         | Just (VarT v) <- prj var
-        , Right Dict <- pwit pType t
+        , Right Dict <- pwit pSmallType t
         = lookAlias v
     go t lt (a :* (lam :$ body) :* Nil)
         | Just (Let tag) <- prj lt
         , Just (LamT v)  <- prj lam
-        , Right Dict     <- pwit pType (getDecor a)
+        , Right Dict     <- pwit pSmallType (getDecor a)
         = do let base = if null tag then "let" else tag
-             r  <- initRefV base =<< goAST a
+             r  <- initRefV (S.pack base) =<< goAST a
              a' <- unsafeFreezeRefV r
              localAlias v a' $ goAST body
+{-
     go t tup (a :* b :* Nil)
         | Just Tup2 <- prj tup = VTup2 <$> goAST a <*> goAST b
     go t tup (a :* b :* c :* Nil)
@@ -264,6 +291,7 @@ transAST = goAST . optimize
         | Just Sel13 <- prj sel = fmap vsel13 $ goAST a
         | Just Sel14 <- prj sel = fmap vsel14 $ goAST a
         | Just Sel15 <- prj sel = fmap vsel15 $ goAST a
+-}
     go t c Nil
         | Just Pi <- prj c = return $ Actual pi
     go t op (a :* Nil)
@@ -273,7 +301,7 @@ transAST = goAST . optimize
         | Just I2N   <- prj op = liftVirt i2n    <$> goAST a
         | Just I2B   <- prj op = liftVirt i2b    <$> goAST a
         | Just B2I   <- prj op = liftVirt b2i    <$> goAST a
-        | Just Round <- prj op = liftVirt round_ <$> goAST a
+--        | Just Round <- prj op = liftVirt round_ <$> goAST a
         | Just Not   <- prj op = liftVirt not_   <$> goAST a
     go t op (a :* b :* Nil)
         | Just Add  <- prj op = liftVirt2 (+)   <$> goAST a <*> goAST b
@@ -317,9 +345,7 @@ transAST = goAST . optimize
         = do len'  <- goSmallAST len
              state <- initRefV "state" =<< goAST init
              ReaderT $ \env -> for (0, 1, Excl len') $ \i -> flip runReaderT env $ do
-                s <- case pwit pSmallType t of
-                    Right Dict -> unsafeFreezeRefV state  -- For non-compound states
-                    _          -> getRefV state
+                s <- unsafeFreezeRefV state  -- For non-compound states
                 s' <- localAlias iv (Actual i) $
                         localAlias sv s $
                           goAST body
@@ -335,6 +361,22 @@ transAST = goAST . optimize
             a' <- goAST a
             lower (unComp prog)
             return a'
+
+(#!) = error "TODO: immutable arrays in imperative-edsl"
+b2i = error "TODO: b2i in imperative-edsl"
+callProcAssign = undefined
+callProc = undefined
+callFun = undefined
+addExternProc = undefined
+addExternFun = undefined
+addDefinition = undefined
+addInclude = undefined
+feof = undefined
+fprf = undefined
+fget = undefined
+newNamedObject = undefined
+fclose = undefined
+fopen = undefined
 
 -- | Translate a Feldspar expression
 translateExp :: Data a -> Target (VExp a)
@@ -368,27 +410,30 @@ runIO'
   -- involving `IOSym`. But at the moment of writing this, we're not using those
   -- symbols for anything anyway.
 
+{-
 -- | Like 'runIO' but with explicit input/output connected to @stdin@/@stdout@
 captureIO :: MonadRun m
     => m a        -- ^ Program to run
     -> String     -- ^ Input to send to @stdin@
     -> IO String  -- ^ Result from @stdout@
 captureIO = Imp.captureIO . lowerTop . liftRun
+-}
 
 -- | Compile a program to C code represented as a string. To compile the
 -- resulting C code, use something like
 --
 -- > gcc -std=c99 YOURPROGRAM.c
-compile :: MonadRun m => m a -> String
-compile  = Imp.compile . lowerTop . liftRun
+compile :: (ReturnValue a, Export (m a), MonadRun m) => CodeTuning -> m a -> JSString
+compile t = Imp.compile t . lowerTop . liftRun
 
 -- | Compile a program to C code and print it on the screen. To compile the
 -- resulting C code, use something like
 --
 -- > gcc -std=c99 YOURPROGRAM.c
-icompile :: MonadRun m => m a -> IO ()
-icompile  = putStrLn . compile
+icompile :: (ReturnValue a, Export (m a), MonadRun m) => CodeTuning -> m a -> IO ()
+icompile t = putStrLn . S.unpack . compile t
 
+{-
 -- | Generate C code and use GCC to check that it compiles (no linking)
 compileAndCheck' :: MonadRun m => ExternalCompilerOpts -> m a -> IO ()
 compileAndCheck' opts = Imp.compileAndCheck' opts . lowerTop . liftRun
@@ -441,3 +486,4 @@ compareCompiled :: MonadRun m
     -> IO ()
 compareCompiled = compareCompiled' mempty
 
+-}

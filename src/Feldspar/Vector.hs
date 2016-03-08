@@ -30,6 +30,7 @@ instance Syntax a => Forcible (Vector a)
     toValue   = fromPull
     fromValue = toPull
 
+{-
 instance Syntax a => Storable (Vector a)
   where
     type StoreRep (Vector a)  = (Ref Length, Arr (Internal a))
@@ -54,6 +55,7 @@ instance Syntax a => Storable (Vector a)
         sLen <- unsafeFreezeRef sLenRef
         setRef dLenRef sLen
         copyArr dst src sLen
+-}
 
 length :: Vector a -> Data Length
 length (Indexed len _) = len
@@ -147,23 +149,25 @@ fromPull (Indexed len ixf) = do
 -- * Examples
 --------------------------------------------------------------------------------
 
+{-
 -- | The span of a vector (difference between greatest and smallest element)
-spanVec :: Vector (Data Float) -> Data Float
+spanVec :: Vector (Data Double) -> Data Double
 spanVec vec = hi-lo
   where
     (lo,hi) = fold (\a (l,h) -> (min a l, max a h)) (vec!0,vec!0) vec
   -- This demonstrates how tuples interplay with sharing. Tuples are essentially
   -- useless without sharing. This function would get two identical for loops if
   -- it wasn't for sharing.
+-}
 
 -- | Scalar product
-scProd :: Vector (Data Float) -> Vector (Data Float) -> Data Float
+scProd :: Vector (Data Double) -> Vector (Data Double) -> Data Double
 scProd a b = sum (zipWith (*) a b)
 
 forEach = flip map
 
 -- | Matrix multiplication
-matMul :: Matrix Float -> Matrix Float -> Matrix Float
+matMul :: Matrix Double -> Matrix Double -> Matrix Double
 matMul a b = forEach a $ \a' ->
                forEach (transpose b) $ \b' ->
                  scProd a' b'

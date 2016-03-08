@@ -80,6 +80,7 @@ instance MonadComp m => MonadComp (OptionT m)
             caseOptionT (cont >>= setRef cr) (\_ -> setRef okr false >> setRef cr false) return
             unsafeFreezeRef cr
 
+{-
 instance Syntax a => Syntactic (Option a)
   where
     type Domain   (Option a) = FeldDomain
@@ -136,6 +137,7 @@ instance (Storable a, Syntax a) => Storable (Option a)
         (\a -> writeStoreRep oRep (true,a))
     copyStoreRep _ = copyStoreRep (Nothing :: Maybe (Data Bool, a))
       -- Uses the instance `Storable (Data Bool, a)` for copying
+-}
 
 -- | Construct a missing 'Option' value (analogous to 'Left' in normal Haskell)
 none :: String -> OptionT m a

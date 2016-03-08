@@ -15,9 +15,9 @@ import Feldspar.Frontend
 
 type RunCMD
     =   ControlCMD Data
-    :+: PtrCMD
-    :+: FileCMD    Data
-    :+: C_CMD      Data
+--    :+: PtrCMD
+--    :+: FileCMD    Data
+--    :+: C_CMD      Data
 
 -- | Monad for running Feldspar programs
 newtype Run a = Run { unRun :: ProgramT RunCMD (Program CompCMD) a }

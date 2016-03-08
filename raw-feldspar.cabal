@@ -34,17 +34,9 @@ library
     Feldspar.Run.Frontend
     Feldspar.Run.Compile
     Feldspar.Run
-    Feldspar.Hardware.Representation
-    Feldspar.Hardware.Frontend
-    Feldspar.Hardware.Compile
-    Feldspar.Hardware
     Feldspar.Vector
     Feldspar.Option
     Feldspar.Validated
-
-  other-modules:
-    Data.Inhabited.TH
-    Data.VirtualContainer.TH
 
   default-language: Haskell2010
 
@@ -68,14 +60,12 @@ library
     base < 5,
     containers,
     imperative-edsl >=0.4.1,
-    hardware-edsl >=0.1.0.1,
-    language-c-quote,
     mtl,
     open-typerep >= 0.5,
     operational-alacarte,
     prelude-edsl,
-    syntactic >= 3.5,
-    template-haskell
+    syntactic >= 3.4,
+    haste-lib >= 0.5 && < 0.6
 
   hs-source-dirs: src
 

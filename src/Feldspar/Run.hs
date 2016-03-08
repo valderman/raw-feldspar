@@ -8,8 +8,7 @@ module Feldspar.Run
   , runIO
   , compile
   , icompile
-  , ExternalCompilerOpts (..)
-  , defaultExtCompilerOpts
+    {-
   , compileAndCheck'
   , compileAndCheck
   , runCompiled'
@@ -18,11 +17,8 @@ module Feldspar.Run
   , captureCompiled
   , compareCompiled'
   , compareCompiled
+-}
   ) where
-
-
-
-import Language.Embedded.Backend.C (ExternalCompilerOpts (..), defaultExtCompilerOpts)
 
 import Feldspar
 import Feldspar.Run.Representation

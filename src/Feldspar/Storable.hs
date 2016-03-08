@@ -45,7 +45,7 @@ class Forcible a
 --     guarantee for `desugar` of the `Syntactic` class.
 --   * We can use data structures such as `IArr` as the representation of values
 
-instance Type a => Forcible (Data a)
+instance SmallType a => Forcible (Data a)
   where
     type ValueRep (Data a) = Data a
     toValue   = unsafeFreezeRef <=< initRef
@@ -128,7 +128,7 @@ class Storable a
         -> StoreRep a  -- ^ Source
         -> m ()
 
-instance Type a => Storable (Data a)
+instance SmallType a => Storable (Data a)
   where
     type StoreRep (Data a)  = Ref a
     type StoreSize (Data a) = ()

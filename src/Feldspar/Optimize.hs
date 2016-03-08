@@ -12,7 +12,6 @@ import qualified Data.Set as Set
 
 import Language.Syntactic
 import Language.Syntactic.Functional
-import Language.Syntactic.Functional.Tuple
 import Language.Syntactic.Functional.Sharing
 
 import Data.TypeRep
@@ -25,7 +24,7 @@ import Feldspar.Representation
 isExact :: ASTF FeldDomain a -> Bool
 isExact a = simpleMatch
     ( \(_ :&: t) _ -> case () of
-          _ | Just _ <- typeEq t floatType  -> False
+--          _ | Just _ <- typeEq t floatType  -> False
           _ | Just _ <- typeEq t doubleType -> False
           _ -> True
     )
@@ -290,7 +289,7 @@ cmInterface = defaultInterfaceDecor
       -- Don't place let bindings over lambdas. This ensures that function
       -- arguments of higher-order constructs such as `ForLoop` are always
       -- lambdas.
-    sharable (SymP _ (_ :: Tuple (b :-> Full c)) :$ _) _ = False
+--    sharable (SymP _ (_ :: Tuple (b :-> Full c)) :$ _) _ = False
             -- Any unary `Tuple` symbol must be a selector (because there are no
             -- 1-tuples).
     sharable (SymP _ I2N :$ _) _ = False

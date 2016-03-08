@@ -33,15 +33,15 @@ import Feldspar.Run.Representation
 --
 -- The 'IsPointer' class ensures that the operation is only possible for types
 -- that are represented as pointers in C.
-unsafeSwap :: IsPointer a => a -> a -> Run ()
-unsafeSwap a b = Run $ Imp.unsafeSwap a b
+-- unsafeSwap :: IsPointer a => a -> a -> Run ()
+-- unsafeSwap a b = Run $ Imp.unsafeSwap a b
 
 
 
 --------------------------------------------------------------------------------
 -- * File handling
 --------------------------------------------------------------------------------
-
+{-
 -- | Open a file
 fopen :: FilePath -> IOMode -> Run Handle
 fopen file = Run . Imp.fopen file
@@ -246,3 +246,4 @@ addr = Imp.addr
 deref :: FunArg Data -> FunArg Data
 deref = Imp.deref
 
+-}

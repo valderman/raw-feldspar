@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Feldspar.Frontend where
 
 
@@ -20,7 +21,8 @@ import qualified Language.Embedded.Imperative as Imp
 import qualified Data.Inhabited as Inhabited
 import Data.VirtualContainer
 import Feldspar.Representation
-
+import Language.JS.Syntax (VarId)
+import Language.JS.Expression (JSType)
 
 
 --------------------------------------------------------------------------------
@@ -239,11 +241,10 @@ max a b = a>=b ? a $ b
 
 -- | Index into an array
 arrIx :: Syntax a => IArr (Internal a) -> Data Index -> a
-arrIx arr i = resugar $ mapVirtual ix $ unIArr arr
-  where
-    ix :: SmallType b => Imp.IArr Index b -> Data b
-    ix arr = sugarSymTR (ArrIx arr) i
-
+arrIx arr i = undefined -- resugar $ mapVirtual ix $ unIArr arr
+--  where
+--    ix :: SmallType b => Imp.IArr Index b -> Data b
+--    ix arr = sugarSymTR (ArrIx arr) i
 
 
 ----------------------------------------
@@ -300,7 +301,7 @@ newRef = newNamedRef "r"
 -- The provided base name may be appended with a unique identifier to avoid name
 -- collisions.
 newNamedRef :: (Type a, MonadComp m)
-    => String  -- ^ Base name
+    => VarId  -- ^ Base name
     -> m (Ref a)
 newNamedRef base = liftComp $ fmap Ref $
     mapVirtualA (const $ Comp $ Imp.newNamedRef base) virtRep
@@ -314,7 +315,7 @@ initRef = initNamedRef "r"
 -- The provided base name may be appended with a unique identifier to avoid name
 -- collisions.
 initNamedRef :: (Syntax a, MonadComp m)
-    => String  -- ^ Base name
+    => VarId  -- ^ Base name
     -> a       -- ^ Initial value
     -> m (Ref (Internal a))
 initNamedRef base =
@@ -333,16 +334,16 @@ setRef r
     . resugar
 
 -- | Modify the contents of reference.
-modifyRef :: (Syntax a, MonadComp m) => Ref (Internal a) -> (a -> a) -> m ()
+modifyRef :: (JSType (Internal a), Syntax a, MonadComp m) => Ref (Internal a) -> (a -> a) -> m ()
 modifyRef r f = setRef r . f =<< unsafeFreezeRef r
 
 -- | A version of 'modifyRef' that fixes the value type to @`Data` a@
-modifyRefD :: (Type a, MonadComp m) => Ref a -> (Data a -> Data a) -> m ()
+modifyRefD :: (SmallType a, MonadComp m) => Ref a -> (Data a -> Data a) -> m ()
 modifyRefD r f = setRef r . f =<< unsafeFreezeRef r
 
 -- | Freeze the contents of reference (only safe if the reference is not updated
 --   as long as the resulting value is alive).
-unsafeFreezeRef :: (Syntax a, MonadComp m) => Ref (Internal a) -> m a
+unsafeFreezeRef :: (JSType (Internal a), Syntax a, MonadComp m) => Ref (Internal a) -> m a
 unsafeFreezeRef
     = liftComp
     . fmap resugar
@@ -364,7 +365,7 @@ newArr = newNamedArr "a"
 -- The provided base name may be appended with a unique identifier to avoid name
 -- collisions.
 newNamedArr :: forall m a . (Type a, MonadComp m)
-    => String  -- ^ Base name
+    => VarId  -- ^ Base name
     -> Data Length
     -> m (Arr a)
 newNamedArr base l = liftComp $ fmap Arr $
@@ -383,18 +384,18 @@ initArr = initNamedArr "a"
 -- The provided base name may be appended with a unique identifier to avoid name
 -- collisions.
 initNamedArr :: (SmallType a, MonadComp m)
-    => String  -- ^ Base name
+    => VarId  -- ^ Base name
     -> [a]     -- ^ Initial contents
     -> m (Arr a)
 initNamedArr base =
     liftComp . fmap (Arr . Actual) . Comp . Imp.initNamedArr base
 
 -- | Get an element of an array
-getArr :: (Syntax a, MonadComp m) => Data Index -> Arr (Internal a) -> m a
+getArr :: (JSType (Internal a), Syntax a, MonadComp m) => Data Index -> Arr (Internal a) -> m a
 getArr i = liftComp . fmap resugar . mapVirtualA (Comp . Imp.getArr i) . unArr
 
 -- | Set an element of an array
-setArr :: forall m a . (Syntax a, MonadComp m) =>
+setArr :: forall m a . (JSType (Internal a), Syntax a, MonadComp m) =>
     Data Index -> a -> Arr (Internal a) -> m ()
 setArr i a
     = liftComp
@@ -424,25 +425,22 @@ freezeArr :: (Type a, MonadComp m)
     -> Data Length  -- ^ Length of array
     -> m (IArr a)
 freezeArr arr n
-    = liftComp
-    $ fmap IArr
-    $ mapVirtualA (Comp . flip Imp.freezeArr n)
-    $ unArr arr
+    = undefined -- liftComp
+--    $ fmap IArr
+--    $ (Comp . flip Imp.freezeArr n) arr
 
 -- | Freeze a mutable array to an immutable one without making a copy. This is
 -- generally only safe if the the mutable array is not updated as long as the
 -- immutable array is alive.
 unsafeFreezeArr :: (Type a, MonadComp m) => Arr a -> m (IArr a)
-unsafeFreezeArr
-    = liftComp
-    . fmap IArr
-    . mapVirtualA (Comp . Imp.unsafeFreezeArr)
-    . unArr
+unsafeFreezeArr = undefined
+--    = liftComp
+--    . fmap IArr
+--    . (Comp . Imp.unsafeFreezeArr)
 
 -- | Create and initialize an immutable array
 initIArr :: (SmallType a, MonadComp m) => [a] -> m (IArr a)
-initIArr = liftComp . fmap (IArr . Actual) . Comp . Imp.initIArr
-
+initIArr = undefined -- liftComp . fmap (IArr . Actual) . Comp . Imp.initIArr
 
 
 ----------------------------------------
@@ -450,7 +448,7 @@ initIArr = liftComp . fmap (IArr . Actual) . Comp . Imp.initIArr
 ----------------------------------------
 
 -- | Conditional statement that returns an expression
-ifE :: (Syntax a, MonadComp m)
+ifE :: (JSType a, Syntax a, MonadComp m)
     => Data Bool  -- ^ Condition
     -> m a        -- ^ True branch
     -> m a        -- ^ False branch
