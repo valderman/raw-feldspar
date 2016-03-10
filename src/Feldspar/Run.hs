@@ -6,8 +6,8 @@ module Feldspar.Run
   , module Feldspar.Run.Frontend
     -- * Back ends
   , runIO
-  , compile
-  , icompile
+--  , compile
+--  , icompile
     {-
   , compileAndCheck'
   , compileAndCheck

@@ -37,7 +37,7 @@ import Language.JS.Syntax (ToIdent (..))
 import Language.JS.Expression (JSType)
 import Haste (JSString)
 import qualified Haste.JSString as S
-
+import Data.Bits
 
 --------------------------------------------------------------------------------
 -- * Object-language types
@@ -121,6 +121,10 @@ data Primitive sig
     B2I   :: (SmallType a, Integral a) => Primitive (Bool :-> Full a)
     Round :: (SmallType a, SmallType b, RealFrac a, Integral b)
           => Primitive (a :-> Full b)
+    Floor :: (SmallType a, RealFrac a)
+          => Primitive (a :-> Full a)
+    Trunc :: (SmallType a, SmallType b, RealFrac a, Integral b)
+          => Primitive (a :-> Full b)
 
     Not ::                Primitive (Bool :-> Full Bool)
     And ::                Primitive (Bool :-> Bool :-> Full Bool)
@@ -130,32 +134,42 @@ data Primitive sig
     Gt  :: SmallType a => Primitive (a :-> a :-> Full Bool)
     Le  :: SmallType a => Primitive (a :-> a :-> Full Bool)
     Ge  :: SmallType a => Primitive (a :-> a :-> Full Bool)
+    BitAnd :: (Num a, Bits a, SmallType a) => Primitive (a :-> a :-> Full a)
+    BitOr  :: (Num a, Bits a, SmallType a) => Primitive (a :-> a :-> Full a)
+    BitXor :: (Num a, Bits a, SmallType a) => Primitive (a :-> a :-> Full a)
+    BitShl :: (Num a, Bits a, SmallType a) => Primitive (a :-> Word32 :-> Full a)
+    BitShr :: (Num a, Bits a, SmallType a) => Primitive (a :-> Word32 :-> Full a)
 
 instance Render Primitive
   where
-    renderSym Pi    = "Pi"
-    renderSym Add   = "(+)"
-    renderSym Sub   = "(-)"
-    renderSym Mul   = "(*)"
-    renderSym Neg   = "Neg"
-    renderSym Quot  = "Quot"
-    renderSym Rem   = "Rem"
-    renderSym FDiv  = "FDiv"
-    renderSym Sin   = "Sin"
-    renderSym Cos   = "Cos"
-    renderSym Pow   = "Pow"
-    renderSym I2N   = "I2N"
-    renderSym I2B   = "I2B"
-    renderSym B2I   = "B2I"
-    renderSym Round = "Round"
-    renderSym Not   = "Not"
-    renderSym And   = "And"
-    renderSym Or    = "Or"
-    renderSym Eq    = "(==)"
-    renderSym Lt    = "(<)"
-    renderSym Gt    = "(>)"
-    renderSym Le    = "(<=)"
-    renderSym Ge    = "(>=)"
+    renderSym Pi     = "Pi"
+    renderSym Add    = "(+)"
+    renderSym Sub    = "(-)"
+    renderSym Mul    = "(*)"
+    renderSym Neg    = "Neg"
+    renderSym Quot   = "Quot"
+    renderSym Rem    = "Rem"
+    renderSym FDiv   = "FDiv"
+    renderSym Sin    = "Sin"
+    renderSym Cos    = "Cos"
+    renderSym Pow    = "Pow"
+    renderSym I2N    = "I2N"
+    renderSym I2B    = "I2B"
+    renderSym B2I    = "B2I"
+    renderSym Round  = "Round"
+    renderSym Not    = "Not"
+    renderSym And    = "And"
+    renderSym Or     = "Or"
+    renderSym Eq     = "(==)"
+    renderSym Lt     = "(<)"
+    renderSym Gt     = "(>)"
+    renderSym Le     = "(<=)"
+    renderSym Ge     = "(>=)"
+    renderSym BitAnd = "(.&.)"
+    renderSym BitOr  = "(.|.)"
+    renderSym BitXor = "xor"
+    renderSym BitShl = "shiftL"
+    renderSym BitShr = "shiftR"
 
     renderArgs = renderArgsSmart
 
@@ -184,6 +198,11 @@ instance Eval Primitive
     evalSym Gt    = (>)
     evalSym Le    = (<=)
     evalSym Ge    = (>=)
+    evalSym BitAnd = (.&.)
+    evalSym BitOr  = (.|.)
+    evalSym BitXor = xor
+    evalSym BitShl = \x -> shiftL x . fromIntegral
+    evalSym BitShr = \x -> shiftR x . fromIntegral
 
 -- Array indexing
 data Array sig
@@ -371,6 +390,11 @@ instance Symbol Primitive where
   symSig Gt = signature
   symSig Le = signature
   symSig Ge = signature
+  symSig BitAnd = signature
+  symSig BitOr = signature
+  symSig BitXor = signature
+  symSig BitShr = signature
+  symSig BitShl = signature
 
 instance Equality Primitive where
   equal Pi Pi = True
@@ -396,6 +420,11 @@ instance Equality Primitive where
   equal Gt Gt = True
   equal Le Le = True
   equal Ge Ge = True
+  equal BitAnd BitAnd = True
+  equal BitOr  BitOr = True
+  equal BitXor  BitXor = True
+  equal BitShr  BitShr = True
+  equal BitShl  BitShl = True
   equal _ _ = False
 
 instance StringTree Primitive

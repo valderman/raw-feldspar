@@ -37,6 +37,12 @@ library
     Feldspar.Vector
     Feldspar.Option
     Feldspar.Validated
+    Haste.Aplite
+
+  other-modules:
+    Haste.Aplite.Export
+    Haste.Aplite.Classes
+    Haste.Aplite.CMD
 
   default-language: Haskell2010
 
@@ -55,6 +61,11 @@ library
     TypeOperators
     ViewPatterns
 
+  if impl(haste)
+    build-depends: haste-lib >= 0.5 && < 0.6, haste-prim >= 0.5 && < 0.6
+  else
+    build-depends: haste-compiler >= 0.5 && < 0.6
+    
   build-depends:
     array,
     base < 5,
@@ -64,8 +75,7 @@ library
     open-typerep >= 0.5,
     operational-alacarte,
     prelude-edsl,
-    syntactic >= 3.4,
-    haste-lib >= 0.5 && < 0.6
+    syntactic >= 3.4
 
   hs-source-dirs: src
 

@@ -23,7 +23,9 @@ import Data.VirtualContainer
 import Feldspar.Representation
 import Language.JS.Syntax (VarId)
 import Language.JS.Expression (JSType)
-
+import Data.Bits
+import qualified Language.Embedded.Imperative.CMD as Imp
+import qualified Language.Embedded.Expression as Imp
 
 --------------------------------------------------------------------------------
 -- * Pure expressions
@@ -160,7 +162,7 @@ quotRem a b = (q,r)
     r = a - b * q
 
 -- | Integral type casting
-i2n :: (Integral i, Num n, SmallType i, SmallType n) => Data i -> Data n
+i2n :: (Num n, Integral i, SmallType i, SmallType n) => Data i -> Data n
 i2n = sugarSymTR I2N
 
 -- | Cast integer to 'Bool'
@@ -172,8 +174,16 @@ b2i :: (Integral a, SmallType a) => Data Bool -> Data a
 b2i = sugarSymTR B2I
 
 -- | Round a floating-point number to an integer
-round :: (RealFrac n, Integral i, SmallType i, SmallType n) => Data n -> Data i
+round :: (Integral i, SmallType i) => Data Double -> Data i
 round = sugarSymTR Round
+
+-- | Take the floor of a floating point number
+floor :: Data Double -> Data Double
+floor = sugarSymTR Floor
+
+-- | Truncate a floating-point number to an integer
+truncate :: (Integral i, SmallType i) => Data Double -> Data i
+truncate = sugarSymTR Trunc
 
 -- | Boolean negation
 not :: Data Bool -> Data Bool
@@ -309,6 +319,10 @@ newNamedRef base = liftComp $ fmap Ref $
 -- | Create an initialized named reference
 initRef :: (Syntax a, MonadComp m) => a -> m (Ref (Internal a))
 initRef = initNamedRef "r"
+
+-- | Create an initialized named reference
+initRefD :: (Syntax (Data a), MonadComp m) => Data a -> m (Ref (Internal (Data a)))
+initRefD = initNamedRef "r"
 
 -- | Create an initialized reference
 --
@@ -448,11 +462,11 @@ initIArr = undefined -- liftComp . fmap (IArr . Actual) . Comp . Imp.initIArr
 ----------------------------------------
 
 -- | Conditional statement that returns an expression
-ifE :: (JSType a, Syntax a, MonadComp m)
+ifE :: (SmallType a, Syntax (Data a), MonadComp m)
     => Data Bool  -- ^ Condition
-    -> m a        -- ^ True branch
-    -> m a        -- ^ False branch
-    -> m a
+    -> m (Data a)        -- ^ True branch
+    -> m (Data a)        -- ^ False branch
+    -> m (Data a)
 ifE c t f = do
     res <- newRef
     iff c (t >>= setRef res) (f >>= setRef res)
@@ -469,3 +483,15 @@ assert :: MonadComp m
     -> m ()
 assert cond msg = liftComp $ Comp $ Imp.assert cond msg
 
+class Return a where
+  -- | Hard return (i.e. C-style) from a function.
+  return_ :: MonadComp m => a -> m ()
+
+instance SmallType a => Return (Data a) where
+  return_ x = liftComp $ Comp $ Imp.return_ x
+
+instance SmallType a => Return (Arr a) where
+  return_ (Arr (Actual (Imp.ArrComp a))) = return_ (Imp.varExp a :: Data a)
+
+instance Return () where
+  return_ _ = return ()

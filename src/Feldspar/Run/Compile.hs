@@ -21,7 +21,6 @@ import Language.Embedded.Imperative hiding ((:+:) (..), (:<:) (..))
 import qualified Language.Embedded.Imperative as Imp
 import Language.Embedded.Imperative.CMD hiding (Ref, Arr)
 import Language.JS.Expression
-import qualified Language.Embedded.Backend.JS as Imp
 
 import Data.VirtualContainer
 import Feldspar.Representation
@@ -31,9 +30,9 @@ import qualified Feldspar.Frontend as Feld
 
 import Haste (JSString)
 import qualified Haste.JSString as S
-import Language.JS.Print (CodeTuning)
-import Language.JS.Monad (ReturnValue)
-import Language.JS.Export (Export, ApliteCMD)
+import Language.JS.Expression
+import Data.Bits
+
 import Data.TypeRep.Types.Basic
 import Data.TypeRep.Types.IntWord
 import Data.TypeRep.Representation
@@ -92,16 +91,10 @@ instance PWitness JSType IntWordType t where
   pwitSym Int32_t _  = return Dict
   pwitSym Word32_t _ = return Dict
 
-{-
 type TargetCMD
     =       RefCMD CExp
     Imp.:+: ArrCMD CExp
     Imp.:+: ControlCMD CExp
-    Imp.:+: PtrCMD
-    Imp.:+: FileCMD CExp
-    Imp.:+: C_CMD CExp
--}
-type TargetCMD = ApliteCMD
 
 type Env = Map Name VExp'
 
@@ -301,7 +294,9 @@ transAST = goAST . optimize
         | Just I2N   <- prj op = liftVirt i2n    <$> goAST a
         | Just I2B   <- prj op = liftVirt i2b    <$> goAST a
         | Just B2I   <- prj op = liftVirt b2i    <$> goAST a
---        | Just Round <- prj op = liftVirt round_ <$> goAST a
+        | Just Round <- prj op = liftVirt round_ <$> goAST a
+        | Just Floor <- prj op = liftVirt floor_ <$> goAST a
+        | Just Trunc <- prj op = liftVirt f2n    <$> goAST a
         | Just Not   <- prj op = liftVirt not_   <$> goAST a
     go t op (a :* b :* Nil)
         | Just Add  <- prj op = liftVirt2 (+)   <$> goAST a <*> goAST b
@@ -318,6 +313,11 @@ transAST = goAST . optimize
         | Just Gt   <- prj op = liftVirt2 (#>)  <$> goAST a <*> goAST b
         | Just Le   <- prj op = liftVirt2 (#<=) <$> goAST a <*> goAST b
         | Just Ge   <- prj op = liftVirt2 (#>=) <$> goAST a <*> goAST b
+        | Just BitAnd <- prj op = liftVirt2 (.&.) <$> goAST a <*> goAST b
+        | Just BitOr  <- prj op = liftVirt2 (.|.) <$> goAST a <*> goAST b
+        | Just BitXor <- prj op = liftVirt2 (xor) <$> goAST a <*> goAST b
+        | Just BitShr <- prj op = liftVirt2 (shiftRight) <$> goAST a <*> goAST b
+        | Just BitShl <- prj op = liftVirt2 (shiftLeft) <$> goAST a <*> goAST b
     go t arrIx (i :* Nil)
         | Just (Feldspar.Representation.ArrIx arr) <- prj arrIx = do
             i' <- goSmallAST i
@@ -423,15 +423,16 @@ captureIO = Imp.captureIO . lowerTop . liftRun
 -- resulting C code, use something like
 --
 -- > gcc -std=c99 YOURPROGRAM.c
-compile :: (ReturnValue a, Export (m a), MonadRun m) => CodeTuning -> m a -> JSString
-compile t = Imp.compile t . lowerTop . liftRun
+-- compile :: (Export (m a), ReturnValue a, MonadRun m)
+--            => CodeTuning -> m a -> JSString
+-- compile t = Imp.compile t . lowerTop . liftRun
 
 -- | Compile a program to C code and print it on the screen. To compile the
 -- resulting C code, use something like
 --
 -- > gcc -std=c99 YOURPROGRAM.c
-icompile :: (ReturnValue a, Export (m a), MonadRun m) => CodeTuning -> m a -> IO ()
-icompile t = putStrLn . S.unpack . compile t
+-- icompile :: (ReturnValue a, MonadRun m) => CodeTuning -> m a -> IO ()
+-- icompile t = putStrLn . S.unpack . compile t
 
 {-
 -- | Generate C code and use GCC to check that it compiles (no linking)
